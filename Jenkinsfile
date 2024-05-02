@@ -76,9 +76,6 @@ spec:
                     sh 'kubectl version'
                     }
                 }
-                script {
-                    qualityGates = readYaml file: 'quality-gates.yaml'
-                }
             }
         }
      
