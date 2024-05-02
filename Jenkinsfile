@@ -70,10 +70,10 @@ spec:
                 container('podman') {
                     sh 'podman --version'
                     sh "podman login $CONTAINER_REGISTRY_URL -u $CONTAINER_REGISTRY_CRED_USR -p $CONTAINER_REGISTRY_CRED_PSW"
-                }
+                 }
                 container('kubectl') {
                     withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
-                        sh 'kubectl version'
+                    sh 'kubectl version'
                     }
                 }
                 script {
@@ -81,85 +81,84 @@ spec:
                 }
             }
         }
- 
-    }
- 
-    stage('Compile') {
-            steps {
-                echo '-=- compiling project -=-'
-                sh './mvnw compile'
-            }
-    }
- 
-    stage('Unit tests') {
-            steps {
-                echo '-=- execute unit tests -=-'
-                sh './mvnw test org.jacoco:jacoco-maven-plugin:report'
-                junit 'target/surefire-reports/*.xml'
-                jacoco execPattern: 'target/jacoco.exec'
-            }
-    }
- 
-    stage('Mutation tests') {
-            steps {
-                echo '-=- execute mutation tests -=-'
-                sh './mvnw org.pitest:pitest-maven:mutationCoverage'
-            }
-    }
- 
-    stage('Package') {
-            steps {
-                echo '-=- packaging project -=-'
-                sh './mvnw package -DskipTests'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            }
-    }
- 
-    stage('Build & push container image') {
-            steps {
-                echo '-=- build & push container image -=-'
-                container('podman') {
-                    sh "podman build -t $IMAGE_SNAPSHOT ."
-                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
-                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
-                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
-                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
+     
+        stage('Compile') {
+                steps {
+                    echo '-=- compiling project -=-'
+                    sh './mvnw compile'
                 }
-            }
-    }
-    stage('Run container image') {
-            steps {
-                echo '-=- run container image -=-'
-                container('kubectl') {
-                    withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
-                        sh "kubectl run $EPHTEST_CONTAINER_NAME --image=$CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT --env=JAVA_OPTS=-javaagent:/jacocoagent.jar=output=tcpserver,address=*,port=$APP_JACOCO_PORT --port=$APP_LISTENING_PORT"
-                        sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_LISTENING_PORT"
-                        sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_JACOCO_PORT --name=$EPHTEST_CONTAINER_NAME-jacoco"
+        }
+     
+        stage('Unit tests') {
+                steps {
+                    echo '-=- execute unit tests -=-'
+                    sh './mvnw test org.jacoco:jacoco-maven-plugin:report'
+                    junit 'target/surefire-reports/*.xml'
+                    jacoco execPattern: 'target/jacoco.exec'
+                }
+        }
+     
+        stage('Mutation tests') {
+                steps {
+                    echo '-=- execute mutation tests -=-'
+                    sh './mvnw org.pitest:pitest-maven:mutationCoverage'
+                }
+        }
+     
+        stage('Package') {
+                steps {
+                    echo '-=- packaging project -=-'
+                    sh './mvnw package -DskipTests'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+        }
+     
+        stage('Build & push container image') {
+                steps {
+                    echo '-=- build & push container image -=-'
+                    container('podman') {
+                        sh "podman build -t $IMAGE_SNAPSHOT ."
+                        sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
+                        sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
+                        sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
+                        sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
                     }
                 }
-            }
-    }
- 
-    stage('Integration tests') {
-            steps {
-                echo '-=- execute integration tests -=-'
-                sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
-                sh "./mvnw failsafe:integration-test failsafe:verify -Dtest.target.server.url=$EPHTEST_BASE_URL"
-                sh "java -jar target/dependency/jacococli.jar dump --address $EPHTEST_CONTAINER_NAME-jacoco --port $APP_JACOCO_PORT --destfile target/jacoco-it.exec"
-                sh 'mkdir target/site/jacoco-it'
-                sh 'java -jar target/dependency/jacococli.jar report target/jacoco-it.exec --classfiles target/classes --xml target/site/jacoco-it/jacoco.xml'
-                junit 'target/failsafe-reports/*.xml'
-                jacoco execPattern: 'target/jacoco-it.exec'
-            }
-    }
- 
-    stage('Performance tests') {
-            steps {
-                echo '-=- execute performance tests -=-'
-                sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
-                sh "./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=$EPHTEST_CONTAINER_NAME -Djmeter.target.port=$APP_LISTENING_PORT -Djmeter.target.root=$APP_CONTEXT_ROOT"
-                perfReport sourceDataFiles: 'target/jmeter/results/*.csv'
-            }
+        }
+        stage('Run container image') {
+                steps {
+                    echo '-=- run container image -=-'
+                    container('kubectl') {
+                        withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
+                            sh "kubectl run $EPHTEST_CONTAINER_NAME --image=$CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT --env=JAVA_OPTS=-javaagent:/jacocoagent.jar=output=tcpserver,address=*,port=$APP_JACOCO_PORT --port=$APP_LISTENING_PORT"
+                            sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_LISTENING_PORT"
+                            sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_JACOCO_PORT --name=$EPHTEST_CONTAINER_NAME-jacoco"
+                        }
+                    }
+                }
+        }
+     
+        stage('Integration tests') {
+                steps {
+                    echo '-=- execute integration tests -=-'
+                    sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
+                    sh "./mvnw failsafe:integration-test failsafe:verify -Dtest.target.server.url=$EPHTEST_BASE_URL"
+                    sh "java -jar target/dependency/jacococli.jar dump --address $EPHTEST_CONTAINER_NAME-jacoco --port $APP_JACOCO_PORT --destfile target/jacoco-it.exec"
+                    sh 'mkdir target/site/jacoco-it'
+                    sh 'java -jar target/dependency/jacococli.jar report target/jacoco-it.exec --classfiles target/classes --xml target/site/jacoco-it/jacoco.xml'
+                    junit 'target/failsafe-reports/*.xml'
+                    jacoco execPattern: 'target/jacoco-it.exec'
+                }
+        }
+     
+        stage('Performance tests') {
+                steps {
+                    echo '-=- execute performance tests -=-'
+                    sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
+                    sh "./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=$EPHTEST_CONTAINER_NAME -Djmeter.target.port=$APP_LISTENING_PORT -Djmeter.target.root=$APP_CONTEXT_ROOT"
+                    perfReport sourceDataFiles: 'target/jmeter/results/*.csv'
+                }
+        }
     }
 }
 def getPomVersion() {
