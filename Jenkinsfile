@@ -106,7 +106,7 @@ spec:
             steps {
                 echo '-=- run software composition analysis -=-'
                 sh './mvnw dependency-check:check'
-                dependencyCheckPublisher
+                dependencyCheckPublisher 'Dependency-Check'
             }
         }
      
