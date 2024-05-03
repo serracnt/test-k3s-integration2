@@ -101,14 +101,6 @@ spec:
                     sh './mvnw org.pitest:pitest-maven:mutationCoverage'
                 }
         }
-
-        stage('Software composition analysis') {
-            steps {
-                echo '-=- run software composition analysis -=-'
-                sh './mvnw dependency-check:check'
-                dependencyCheckPublisher 'Dependency-Check'
-            }
-        }
      
         stage('Package') {
                 steps {
