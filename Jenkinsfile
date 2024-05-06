@@ -31,6 +31,14 @@ spec:
       securityContext:
         runAsUser: 0
         privileged: true
+    - name: lhci
+      image: docker.io/patrickhulce/lhci-client:0.12.0
+      command:
+        - cat
+      tty: true
+      securityContext:
+        runAsUser: 0
+        privileged: true
   volumes:
     - name: m2-cache
       hostPath:
@@ -57,6 +65,8 @@ spec:
         // credentials
         KUBERNETES_CLUSTER_CRED_ID = 'k3s-lima-vm-kubeconfig2'
         CONTAINER_REGISTRY_CRED = credentials("docker-hub-$IMAGE_ORG")
+        LIGHTHOUSE_TOKEN = credentials("ci-lighthouse-token-project1")
+        LIGHTHOUSE_URL = credentials('ci-lighthouse-url')
     }
     stages {
         stage('Prepare environment') {
@@ -179,6 +189,22 @@ spec:
                     sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_GA"
                     sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_GA_LATEST"
                     sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_GA_LATEST"
+                }
+            }
+        }
+
+        stage('Web page performance analysis') {
+            steps {
+                echo '-=- execute web page performance analysis -=-'
+                container('lhci') {
+                    sh """
+                      cd $WORKSPACE
+                      git config --global --add safe.directory $WORKSPACE
+                      export LHCI_BUILD_CONTEXT__CURRENT_BRANCH=$GIT_BRANCH
+                      lhci collect --collect.settings.chromeFlags='--no-sandbox' --url ${EPHTEST_BASE_URL}hello
+                      lhci assert --preset=lighthouse:recommended --includePassedAssertions
+                      lhci upload --token $LIGHTHOUSE_TOKEN --serverBaseUrl $LIGHTHOUSE_URL --ignoreDuplicateBuildFailure
+                    """
                 }
             }
         }
